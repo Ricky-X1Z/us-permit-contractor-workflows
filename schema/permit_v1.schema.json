@@ -1,0 +1,152 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/permit-intel/schema/v1.json",
+  "title": "Permit lead record v1",
+  "description": "Unified building-permit record emitted by permit_intel_core (schema_version 1.0). Homeowner/owner names are never included.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "record_id", "source", "permit", "property", "contractor", "specs", "enrichment", "delta"],
+  "definitions": {
+    "nullable_string": {"type": ["string", "null"]},
+    "nullable_number": {"type": ["number", "null"]},
+    "date": {"type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+    "timestamp": {"type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"},
+    "state": {"type": ["string", "null"], "pattern": "^[A-Z]{2}$"},
+    "zip": {"type": ["string", "null"], "pattern": "^\\d{5}$"},
+    "category": {"enum": ["solar", "battery_storage", "roofing", "hvac", "ev_charger", "adu", "pool"]}
+  },
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "record_id": {"type": "string", "pattern": "^[0-9a-f]{40}$", "description": "sha1(source_id + permit_number)"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "jurisdiction", "state", "dataset_id", "source_url", "source_updated_at", "fetched_at"],
+      "properties": {
+        "source_id": {"enum": ["austin_tx", "san_diego_ca", "nyc_dob", "seattle_wa", "los_angeles_ca", "chicago_il"]},
+        "jurisdiction": {"type": "string"},
+        "state": {"$ref": "#/definitions/state"},
+        "dataset_id": {"type": "string", "pattern": "^[a-z0-9]{4}-[a-z0-9]{4}$"},
+        "source_url": {"type": "string", "pattern": "^https://"},
+        "source_updated_at": {"$ref": "#/definitions/timestamp"},
+        "fetched_at": {"$ref": "#/definitions/timestamp"}
+      }
+    },
+    "permit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["permit_number", "permit_type", "permit_type_desc", "work_class", "description", "status", "applied_date", "issued_date", "valuation_usd"],
+      "properties": {
+        "permit_number": {"type": "string", "minLength": 1},
+        "permit_type": {"$ref": "#/definitions/nullable_string"},
+        "permit_type_desc": {"$ref": "#/definitions/nullable_string"},
+        "work_class": {"$ref": "#/definitions/nullable_string"},
+        "description": {"$ref": "#/definitions/nullable_string"},
+        "status": {"$ref": "#/definitions/nullable_string"},
+        "applied_date": {"$ref": "#/definitions/date"},
+        "issued_date": {"$ref": "#/definitions/date"},
+        "valuation_usd": {"type": ["number", "null"], "exclusiveMinimum": 0}
+      }
+    },
+    "property": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["address", "city", "state", "zip", "lat", "lon"],
+      "properties": {
+        "address": {"$ref": "#/definitions/nullable_string"},
+        "city": {"$ref": "#/definitions/nullable_string"},
+        "state": {"$ref": "#/definitions/state"},
+        "zip": {"$ref": "#/definitions/zip"},
+        "lat": {"type": ["number", "null"], "minimum": -90, "maximum": 90},
+        "lon": {"type": ["number", "null"], "minimum": -180, "maximum": 180}
+      }
+    },
+    "contractor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["company_name", "person_name", "trade", "phone_e164", "phone_raw", "license_number", "license_state", "license_type", "license_status", "address", "insurance", "bond"],
+      "properties": {
+        "company_name": {"$ref": "#/definitions/nullable_string"},
+        "person_name": {"$ref": "#/definitions/nullable_string", "description": "Contractor's named person (never a homeowner)."},
+        "trade": {"$ref": "#/definitions/nullable_string"},
+        "phone_e164": {"type": ["string", "null"], "pattern": "^\\+1[2-9]\\d{2}[2-9]\\d{6}$"},
+        "phone_raw": {"$ref": "#/definitions/nullable_string"},
+        "license_number": {"$ref": "#/definitions/nullable_string"},
+        "license_state": {"$ref": "#/definitions/state"},
+        "license_type": {"$ref": "#/definitions/nullable_string"},
+        "license_status": {"$ref": "#/definitions/nullable_string"},
+        "address": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["line1", "city", "state", "zip"],
+          "properties": {
+            "line1": {"$ref": "#/definitions/nullable_string"},
+            "city": {"$ref": "#/definitions/nullable_string"},
+            "state": {"$ref": "#/definitions/state"},
+            "zip": {"$ref": "#/definitions/zip"}
+          }
+        },
+        "insurance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["policy_no", "cancel_date"],
+          "properties": {
+            "policy_no": {"$ref": "#/definitions/nullable_string"},
+            "cancel_date": {"$ref": "#/definitions/date"}
+          }
+        },
+        "bond": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["amount_usd", "expiration_date", "impaired"],
+          "properties": {
+            "amount_usd": {"$ref": "#/definitions/nullable_number"},
+            "expiration_date": {"$ref": "#/definitions/date"},
+            "impaired": {"type": ["boolean", "null"]}
+          }
+        }
+      }
+    },
+    "specs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["categories", "solar_kw", "battery_kwh", "battery_units", "roof_squares", "hvac_tons", "hvac_seer", "ev_charger", "ev_charger_count", "adu", "pool", "extraction_confidence"],
+      "properties": {
+        "categories": {"type": "array", "items": {"$ref": "#/definitions/category"}, "uniqueItems": true},
+        "solar_kw": {"type": ["number", "null"], "minimum": 1, "maximum": 2000},
+        "solar_panel_count": {"type": ["integer", "null"], "minimum": 1},
+        "battery_kwh": {"type": ["number", "null"], "minimum": 1, "maximum": 2000},
+        "battery_units": {"type": ["integer", "null"], "minimum": 1},
+        "roof_squares": {"type": ["number", "null"], "minimum": 1, "maximum": 500},
+        "hvac_tons": {"type": ["number", "null"], "minimum": 0.5, "maximum": 100},
+        "hvac_seer": {"type": ["number", "null"], "minimum": 10, "maximum": 40},
+        "ev_charger": {"type": "boolean"},
+        "ev_charger_count": {"type": ["integer", "null"], "minimum": 1},
+        "adu": {"type": "boolean"},
+        "pool": {"type": "boolean"},
+        "extraction_confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "category_confidence": {"type": "object", "additionalProperties": {"type": "number", "minimum": 0, "maximum": 1}}
+      }
+    },
+    "enrichment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["phone_source", "license_match_method", "match_confidence"],
+      "properties": {
+        "phone_source": {"enum": ["permit_feed", "license_join", null]},
+        "license_match_method": {"enum": ["exact_license", "normalized_name", null]},
+        "match_confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1}
+      }
+    },
+    "delta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["first_seen_at", "is_new"],
+      "properties": {
+        "first_seen_at": {"$ref": "#/definitions/timestamp"},
+        "is_new": {"type": "boolean"},
+        "change": {"enum": ["new", "updated", "unchanged"]}
+      }
+    }
+  }
+}

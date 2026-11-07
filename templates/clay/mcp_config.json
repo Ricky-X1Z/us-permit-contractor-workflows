@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "permit-history": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://RickyZ1X--permit-history-lookup-api.apify.actor/mcp",
+        "--header",
+        "Authorization: Bearer ${APIFY_TOKEN}"
+      ],
+      "env": {
+        "APIFY_TOKEN": "YOUR_APIFY_API_TOKEN"
+      }
+    },
+    "permit-history-http": {
+      "type": "http",
+      "url": "https://RickyZ1X--permit-history-lookup-api.apify.actor/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_APIFY_API_TOKEN"
+      }
+    }
+  }
+}

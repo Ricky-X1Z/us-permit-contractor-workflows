@@ -1,0 +1,472 @@
+{
+  "name": "Weekly contractor insurance & bond expiration alerts -> Google Sheets + Slack (Apify)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Weekly contractor insurance & bond expiration alerts -> Google Sheets + Slack\n\n**What it does:** every Monday morning at 07:00 it runs the Apify Actor *Contractor License, Insurance & Bond Expiration Radar* (`RickyZ1X~contractor-license-insurance-bond-radar`) for Washington State (WA L&I), keeps active contractors whose general liability insurance policy, surety bond, or contractor license expires within the next 30 days, appends them to Google Sheets, and posts a weekly renewal outreach digest to Slack.\n\n### Setup (about 10 minutes)\n1. **Apify token**: Apify Console -> Settings -> API & Integrations -> copy your personal API token. In the *Run Apify Actor (expiration radar)* node create a **Header Auth** credential: Name = `Authorization`, Value = `Bearer YOUR_APIFY_API_TOKEN`.\n2. **Google Sheets**: create a sheet whose first row has these headers: `Contractor, Phone, License, Status, Alert Type, Earliest Expiry, Days Left, Insurer, Insurance Agency, Bond Surety, Bond Amount USD, City, Specialties`. Paste the spreadsheet ID into *Append to Google Sheet* and pick the tab.\n3. **Slack**: connect a Slack credential and set the channel (e.g. `#renewal-alerts`) in *Post Slack digest*.\n4. Click **Test workflow** once, then **Activate**.\n\n### Cost\nRuns are billed to *your* Apify account per event (`contractor-record`, plus `expiring-alert-record` for contractors with an active expiration alert inside your window). `maxRecords` in the JSON body caps the spend per run. The Apify free plan's monthly credit is enough to test it.\n\n### Compliance\nB2B use only. Data comes from official Washington State L&I public contractor registration records and contains **no consumer or homeowner data**; phone numbers are the contractor's registered business phone numbers. You are responsible for complying with the TCPA, the National Do-Not-Call Registry, state telemarketing laws, and insurance solicitation rules.",
+        "height": 720,
+        "width": 560,
+        "color": 4
+      },
+      "id": "7b2e3a10-0001-4c1a-9b10-b0b0b0b00001",
+      "name": "Setup & compliance",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "weeksInterval": 1,
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 7,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "7b2e3a10-0002-4c1a-9b10-b0b0b0b00002",
+      "name": "Every Monday at 07:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/RickyZ1X~contractor-license-insurance-bond-radar/run-sync-get-dataset-items",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "timeout",
+              "value": "290"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"state\": \"WA\",\n  \"expiringWithinDays\": 30,\n  \"alertTypes\": [\n    \"insurance\",\n    \"bond\",\n    \"license\"\n  ],\n  \"onlyActive\": true,\n  \"maxRecords\": 250\n}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "7b2e3a10-0003-4c1a-9b10-b0b0b0b00003",
+      "name": "Run Apify Actor (expiration radar)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "notesInFlow": true,
+      "notes": "Header Auth credential: Authorization = Bearer YOUR_APIFY_API_TOKEN"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "7b2e3a10-0004-4c1a-9b10-b0b0b0b00014",
+              "leftValue": "={{ Boolean($json.is_expiring_alert) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7b2e3a10-0004-4c1a-9b10-b0b0b0b00004",
+      "name": "Has expiring alert?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b2f0c0de-0000-4000-8000-000000000001",
+              "name": "Contractor",
+              "value": "={{ $json.contractor?.company_name ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "b2f0c0de-0000-4000-8000-000000000002",
+              "name": "Phone",
+              "value": "={{ $json.contractor?.phone_e164 ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "b2f0c0de-0000-4000-8000-000000000003",
+              "name": "License",
+              "value": "={{ $json.contractor?.license_number ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "b2f0c0de-0000-4000-8000-000000000004",
+              "name": "Status",
+              "value": "={{ $json.contractor?.license_status ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "b2f0c0de-0000-4000-8000-000000000005",
+              "name": "Alert Type",
+              "value": "={{ ($json.alerts ?? []).map(a => a.type).join(', ') }}",
+              "type": "string"
+            },
+            {
+              "id": "b2f0c0de-0000-4000-8000-000000000006",
+              "name": "Earliest Expiry",
+              "value": "={{ $json.alerts?.[0]?.date ?? $json.insurance?.expiration_date ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "b2f0c0de-0000-4000-8000-000000000007",
+              "name": "Days Left",
+              "value": "={{ String($json.alerts?.[0]?.days_until ?? $json.insurance?.days_to_expiration ?? '') }}",
+              "type": "string"
+            },
+            {
+              "id": "b2f0c0de-0000-4000-8000-000000000008",
+              "name": "Insurer",
+              "value": "={{ $json.insurance?.company ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "b2f0c0de-0000-4000-8000-000000000009",
+              "name": "Insurance Agency",
+              "value": "={{ $json.insurance?.agency_name ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "b2f0c0de-0000-4000-8000-000000000010",
+              "name": "Bond Surety",
+              "value": "={{ $json.bond?.surety ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "b2f0c0de-0000-4000-8000-000000000011",
+              "name": "Bond Amount USD",
+              "value": "={{ String($json.bond?.amount_usd ?? '') }}",
+              "type": "string"
+            },
+            {
+              "id": "b2f0c0de-0000-4000-8000-000000000012",
+              "name": "City",
+              "value": "={{ $json.contractor?.address?.city ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "b2f0c0de-0000-4000-8000-000000000013",
+              "name": "Specialties",
+              "value": "={{ ($json.contractor?.specialties ?? []).join(', ') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "7b2e3a10-0005-4c1a-9b10-b0b0b0b00005",
+      "name": "Flatten alert columns",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        720,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Contractor",
+              "displayName": "Contractor",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "License",
+              "displayName": "License",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Alert Type",
+              "displayName": "Alert Type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Earliest Expiry",
+              "displayName": "Earliest Expiry",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Days Left",
+              "displayName": "Days Left",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Insurer",
+              "displayName": "Insurer",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Insurance Agency",
+              "displayName": "Insurance Agency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Bond Surety",
+              "displayName": "Bond Surety",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Bond Amount USD",
+              "displayName": "Bond Amount USD",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "City",
+              "displayName": "City",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Specialties",
+              "displayName": "Specialties",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7b2e3a10-0006-4c1a-9b10-b0b0b0b00006",
+      "name": "Append to Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        960,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Build ONE weekly Slack digest: total expiring contractors + top 10 most urgent renewals.\nconst rows = $('Flatten alert columns').all().map(i => i.json);\nconst total = rows.length;\nif (total === 0) {\n  return [];\n}\nconst num = v => (v === '' || v === null || v === undefined || isNaN(Number(v))) ? 999 : Number(v);\nconst top = [...rows]\n  .sort((a, b) => num(a['Days Left']) - num(b['Days Left']))\n  .slice(0, 10)\n  .map((r, i) => `${i + 1}. ${r['Contractor'] || 'unknown'} (${r['City'] || 'WA'}) | ${r['Alert Type']} in ${r['Days Left']}d (${r['Earliest Expiry']}) | Insurer: ${r['Insurer'] || 'n/a'} | ${r['Phone']}`);\nconst today = new Date().toISOString().slice(0, 10);\nconst lines = [\n  `*${total} contractor insurance/bond/license expiration alert(s)* (${today})`,\n  ...top,\n];\nif (total > 10) lines.push(`...and ${total - 10} more in the Google Sheet.`);\nreturn [{ json: { text: lines.join('\\n'), total } }];\n"
+      },
+      "id": "7b2e3a10-0007-4c1a-9b10-b0b0b0b00007",
+      "name": "Build Slack digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#renewal-alerts",
+          "mode": "name"
+        },
+        "text": "={{ $json.text }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "id": "7b2e3a10-0008-4c1a-9b10-b0b0b0b00008",
+      "name": "Post Slack digest",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1440,
+        -100
+      ]
+    }
+  ],
+  "connections": {
+    "Every Monday at 07:00": {
+      "main": [
+        [
+          {
+            "node": "Run Apify Actor (expiration radar)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Apify Actor (expiration radar)": {
+      "main": [
+        [
+          {
+            "node": "Has expiring alert?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has expiring alert?": {
+      "main": [
+        [
+          {
+            "node": "Flatten alert columns",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Flatten alert columns": {
+      "main": [
+        [
+          {
+            "node": "Append to Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append to Google Sheet": {
+      "main": [
+        [
+          {
+            "node": "Build Slack digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Slack digest": {
+      "main": [
+        [
+          {
+            "node": "Post Slack digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

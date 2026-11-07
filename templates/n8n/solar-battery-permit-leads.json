@@ -1,0 +1,454 @@
+{
+  "name": "Daily solar & battery permits with contractor phone -> Google Sheets + Slack (Apify)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Daily solar & battery permits -> Google Sheets + Slack\n\n**What it does:** every morning at 07:00 it runs the Apify Actor *Building Permit Leads + Contractor Phone* (`RickyZ1X~building-permits-contractor-leads`) for Austin TX, San Diego CA and NYC DOB, keeps only NEW solar / battery-storage permits that have a contractor phone, appends them to Google Sheets and posts a one-message Slack digest.\n\n### Setup (about 10 minutes)\n1. **Apify token**: Apify Console -> Settings -> API & Integrations -> copy your personal API token. In the *Run Apify Actor* node create a **Header Auth** credential: Name = `Authorization`, Value = `Bearer YOUR_APIFY_API_TOKEN`.\n2. In the node URL, replace `RickyZ1X` with the Actor owner's username shown on the Store page.\n3. **Google Sheets**: create a sheet whose first row has exactly these headers: `Issued, City, State, Categories, Solar kW, Battery kWh, Contractor, Phone, License, Address, Description, Source URL`. Paste the sheet ID (from its URL) into *Append to Google Sheet* and pick the tab.\n4. **Slack**: connect a Slack credential and set the channel in *Post Slack digest*.\n5. Click **Test workflow** once, then **Activate**.\n\n### Cost\nRuns are billed to *your* Apify account per event (`permit-record`, plus `contact-enriched-record` for rows with a contractor phone). `maxTotalRecords` in the request body caps the spend per run. The Apify free plan's monthly credit is enough to try it. `onlyNew: true` means you only pay for permits you have not received before.\n\n### Notes\n- `run-sync-get-dataset-items` waits up to 300 s. For large pulls (many sources / long `daysBack`), switch to the async run endpoint + a dataset fetch.\n- Edit `sources` / `categories` in the JSON body (sources: austin_tx, san_diego_ca, nyc_dob, seattle_wa, los_angeles_ca, chicago_il; categories: solar, battery_storage, roofing, hvac, ev_charger, adu, pool).\n\n### Compliance\nB2B use only. Data comes from official public open-data permit feeds and contains **no homeowner names or homeowner contact data**; phones are the contractor's business numbers as filed on permits. You (the user) are responsible for complying with the TCPA, the National Do-Not-Call Registry, state telemarketing / mini-TCPA laws and CAN-SPAM before contacting anyone.",
+        "height": 760,
+        "width": 560,
+        "color": 4
+      },
+      "id": "5e1f2a10-0001-4c1a-9b10-a0a0a0a00001",
+      "name": "Setup & compliance",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 7,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "5e1f2a10-0002-4c1a-9b10-a0a0a0a00002",
+      "name": "Every day at 07:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/RickyZ1X~building-permits-contractor-leads/run-sync-get-dataset-items",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "timeout",
+              "value": "290"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"sources\": [\n    \"austin_tx\",\n    \"san_diego_ca\",\n    \"nyc_dob\"\n  ],\n  \"categories\": [\n    \"solar\",\n    \"battery_storage\"\n  ],\n  \"daysBack\": 2,\n  \"onlyNew\": true,\n  \"maxTotalRecords\": 500\n}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "5e1f2a10-0003-4c1a-9b10-a0a0a0a00003",
+      "name": "Run Apify Actor (permit leads)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "notesInFlow": true,
+      "notes": "Header Auth credential: Authorization = Bearer YOUR_APIFY_API_TOKEN"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c0ffee00-0004-4c1a-9b10-a0a0a0a00004",
+              "leftValue": "={{ $json.contractor?.phone_e164 ?? '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5e1f2a10-0004-4c1a-9b10-a0a0a0a00004",
+      "name": "Has contractor phone?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1f0c0de-0000-4000-8000-000000000001",
+              "name": "Issued",
+              "value": "={{ $json.permit?.issued_date ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "a1f0c0de-0000-4000-8000-000000000002",
+              "name": "City",
+              "value": "={{ $json.property?.city ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "a1f0c0de-0000-4000-8000-000000000003",
+              "name": "State",
+              "value": "={{ $json.property?.state ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "a1f0c0de-0000-4000-8000-000000000004",
+              "name": "Categories",
+              "value": "={{ ($json.specs?.categories ?? []).join(', ') }}",
+              "type": "string"
+            },
+            {
+              "id": "a1f0c0de-0000-4000-8000-000000000005",
+              "name": "Solar kW",
+              "value": "={{ $json.specs?.solar_kw ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "a1f0c0de-0000-4000-8000-000000000006",
+              "name": "Battery kWh",
+              "value": "={{ $json.specs?.battery_kwh ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "a1f0c0de-0000-4000-8000-000000000007",
+              "name": "Contractor",
+              "value": "={{ $json.contractor?.company_name || $json.contractor?.person_name || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "a1f0c0de-0000-4000-8000-000000000008",
+              "name": "Phone",
+              "value": "={{ $json.contractor?.phone_e164 ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "a1f0c0de-0000-4000-8000-000000000009",
+              "name": "License",
+              "value": "={{ [$json.contractor?.license_state, $json.contractor?.license_number].filter(Boolean).join(' ') }}",
+              "type": "string"
+            },
+            {
+              "id": "a1f0c0de-0000-4000-8000-000000000010",
+              "name": "Address",
+              "value": "={{ [$json.property?.address, $json.property?.city, $json.property?.state, $json.property?.zip].filter(Boolean).join(', ') }}",
+              "type": "string"
+            },
+            {
+              "id": "a1f0c0de-0000-4000-8000-000000000011",
+              "name": "Description",
+              "value": "={{ ($json.permit?.description ?? '').slice(0, 500) }}",
+              "type": "string"
+            },
+            {
+              "id": "a1f0c0de-0000-4000-8000-000000000012",
+              "name": "Source URL",
+              "value": "={{ $json.source?.source_url ?? '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "5e1f2a10-0005-4c1a-9b10-a0a0a0a00005",
+      "name": "Flatten columns",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        720,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Issued",
+              "displayName": "Issued",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "City",
+              "displayName": "City",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "State",
+              "displayName": "State",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Categories",
+              "displayName": "Categories",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Solar kW",
+              "displayName": "Solar kW",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Battery kWh",
+              "displayName": "Battery kWh",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Contractor",
+              "displayName": "Contractor",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "License",
+              "displayName": "License",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Address",
+              "displayName": "Address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Description",
+              "displayName": "Description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Source URL",
+              "displayName": "Source URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5e1f2a10-0006-4c1a-9b10-a0a0a0a00006",
+      "name": "Append to Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        960,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Build ONE Slack message: total count + top 10 lines (largest solar systems first).\nconst rows = $('Flatten columns').all().map(i => i.json);\nconst total = rows.length;\nif (total === 0) {\n  return [];\n}\nconst num = v => (v === '' || v === null || v === undefined || isNaN(Number(v))) ? 0 : Number(v);\nconst top = [...rows]\n  .sort((a, b) => num(b['Solar kW']) - num(a['Solar kW']))\n  .slice(0, 10)\n  .map((r, i) => {\n    const specs = [\n      r['Solar kW'] ? `${r['Solar kW']} kW PV` : '',\n      r['Battery kWh'] ? `${r['Battery kWh']} kWh battery` : '',\n    ].filter(Boolean).join(', ');\n    return `${i + 1}. ${r['Issued'] || 'n/a'} | ${r['City']}, ${r['State']} | ${r['Categories']}${specs ? ' (' + specs + ')' : ''} | ${r['Contractor'] || 'unknown'} | ${r['Phone']}`;\n  });\nconst today = new Date().toISOString().slice(0, 10);\nconst lines = [\n  `*${total} new solar/battery permit(s) with a contractor phone* (${today})`,\n  ...top,\n];\nif (total > 10) lines.push(`...and ${total - 10} more in the Google Sheet.`);\nreturn [{ json: { text: lines.join('\\n'), total } }];\n"
+      },
+      "id": "5e1f2a10-0007-4c1a-9b10-a0a0a0a00007",
+      "name": "Build Slack digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#permit-leads",
+          "mode": "name"
+        },
+        "text": "={{ $json.text }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "id": "5e1f2a10-0008-4c1a-9b10-a0a0a0a00008",
+      "name": "Post Slack digest",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1440,
+        -100
+      ]
+    }
+  ],
+  "connections": {
+    "Every day at 07:00": {
+      "main": [
+        [
+          {
+            "node": "Run Apify Actor (permit leads)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Apify Actor (permit leads)": {
+      "main": [
+        [
+          {
+            "node": "Has contractor phone?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has contractor phone?": {
+      "main": [
+        [
+          {
+            "node": "Flatten columns",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Flatten columns": {
+      "main": [
+        [
+          {
+            "node": "Append to Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append to Google Sheet": {
+      "main": [
+        [
+          {
+            "node": "Build Slack digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Slack digest": {
+      "main": [
+        [
+          {
+            "node": "Post Slack digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

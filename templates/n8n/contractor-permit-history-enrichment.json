@@ -1,0 +1,258 @@
+{
+  "name": "Enrich contractor list with 12-month building permit history & WA license status (Apify)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Enrich contractor list with 12-month building permit history & WA license status\n\n**What it does:** reads contractor names or license numbers from a Google Sheet, calls the Apify Actor *Contractor & Address Permit History API* (`RickyZ1X~permit-history-lookup-api`) across 6 US jurisdictions (Austin, San Diego County, NYC, Seattle, LA, Chicago) plus Washington State L&I, and writes back each contractor's 12-month permit count, solar/roofing/HVAC breakdown, total project valuation, and license/insurance expiration dates.\n\n### Setup (about 10 minutes)\n1. **Apify token**: Apify Console -> Settings -> API & Integrations -> copy your personal API token. In *Lookup Permit History (Apify)* create a **Header Auth** credential: Name = `Authorization`, Value = `Bearer YOUR_APIFY_API_TOKEN`.\n2. **Google Sheets**: create a spreadsheet with two tabs: `Input` (columns: `Company Name, License Number`) and `Enriched` (columns: `Company Name, License Number, Matched, Permits Last 12m, Total Valuation USD, Last Permit Date, Top Categories, WA License Status, Insurance Expiry, Bond Cancel Date, Verified Phone`).\n3. Paste your spreadsheet ID into both Google Sheets nodes.\n4. Click **Test workflow** to enrich your list.\n\n### Cost\nBilled to *your* Apify account per matched lookup (`lookup` event); no-match lookups are free. The Apify free plan's monthly credit covers testing hundreds of rows.\n\n### Compliance\nB2B contractor business records only, sourced from official municipal open-data portals and state licensing boards. Contains no homeowner names or consumer contact data.",
+        "height": 680,
+        "width": 560,
+        "color": 4
+      },
+      "id": "9c3d4a10-0001-4c1a-9b10-c0c0c0c00001",
+      "name": "Setup & compliance",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        -240
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "9c3d4a10-0002-4c1a-9b10-c0c0c0c00002",
+      "name": "When clicking 'Test workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Input",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "9c3d4a10-0003-4c1a-9b10-c0c0c0c00003",
+      "name": "Read contractors from Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/RickyZ1X~permit-history-lookup-api/run-sync-get-dataset-items",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "timeout",
+              "value": "120"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contractorName\": {{ JSON.stringify($json['Company Name'] || '') }},\n  \"licenseNumber\": {{ JSON.stringify($json['License Number'] || '') }},\n  \"monthsBack\": 12,\n  \"maxPermitsPerLookup\": 10\n}",
+        "options": {
+          "timeout": 130000
+        }
+      },
+      "id": "9c3d4a10-0004-4c1a-9b10-c0c0c0c00004",
+      "name": "Lookup Permit History (Apify)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        0
+      ],
+      "notesInFlow": true,
+      "notes": "Header Auth credential: Authorization = Bearer YOUR_APIFY_API_TOKEN"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c3f0c0de-0000-4000-8000-000000000001",
+              "name": "Company Name",
+              "value": "={{ $json.query?.contractorName || $json.license?.company_name || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "c3f0c0de-0000-4000-8000-000000000002",
+              "name": "License Number",
+              "value": "={{ $json.query?.licenseNumber || $json.license?.license_number || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "c3f0c0de-0000-4000-8000-000000000003",
+              "name": "Matched",
+              "value": "={{ String(Boolean($json.matched)) }}",
+              "type": "string"
+            },
+            {
+              "id": "c3f0c0de-0000-4000-8000-000000000004",
+              "name": "Permits Last 12m",
+              "value": "={{ String($json.permits_summary?.last_12_months ?? 0) }}",
+              "type": "string"
+            },
+            {
+              "id": "c3f0c0de-0000-4000-8000-000000000005",
+              "name": "Total Valuation USD",
+              "value": "={{ String($json.permits_summary?.valuation_usd_total ?? '') }}",
+              "type": "string"
+            },
+            {
+              "id": "c3f0c0de-0000-4000-8000-000000000006",
+              "name": "Last Permit Date",
+              "value": "={{ $json.permits_summary?.last_issued ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "c3f0c0de-0000-4000-8000-000000000007",
+              "name": "Top Categories",
+              "value": "={{ Object.entries($json.permits_summary?.by_category ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') }}",
+              "type": "string"
+            },
+            {
+              "id": "c3f0c0de-0000-4000-8000-000000000008",
+              "name": "WA License Status",
+              "value": "={{ $json.license?.license_status ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "c3f0c0de-0000-4000-8000-000000000009",
+              "name": "Insurance Expiry",
+              "value": "={{ $json.license?.insurance_expiration_date ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "c3f0c0de-0000-4000-8000-000000000010",
+              "name": "Bond Cancel Date",
+              "value": "={{ $json.license?.bond_cancel_date ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "c3f0c0de-0000-4000-8000-000000000011",
+              "name": "Verified Phone",
+              "value": "={{ $json.license?.phone_e164 ?? $json.recent_permits?.[0]?.contractor?.phone_e164 ?? '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "9c3d4a10-0005-4c1a-9b10-c0c0c0c00005",
+      "name": "Flatten enriched profile",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        720,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Enriched",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "9c3d4a10-0006-4c1a-9b10-c0c0c0c00006",
+      "name": "Write enriched row to Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        960,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "When clicking 'Test workflow'": {
+      "main": [
+        [
+          {
+            "node": "Read contractors from Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read contractors from Sheet": {
+      "main": [
+        [
+          {
+            "node": "Lookup Permit History (Apify)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Permit History (Apify)": {
+      "main": [
+        [
+          {
+            "node": "Flatten enriched profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flatten enriched profile": {
+      "main": [
+        [
+          {
+            "node": "Write enriched row to Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

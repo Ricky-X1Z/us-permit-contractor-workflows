@@ -1,0 +1,246 @@
+{
+  "name": "WA contractors with insurance/bond expiring in 30 days -> HubSpot / Pipedrive tasks (Apify)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "https://api.apify.com/v2/acts/RickyZ1X~contractor-license-insurance-bond-radar/run-sync-get-dataset-items",
+        "serializeUrl": false,
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Bearer YOUR_APIFY_API_TOKEN"
+          },
+          {
+            "name": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "qs": [
+          {
+            "name": "timeout",
+            "value": "290"
+          }
+        ],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "authUser": "",
+        "authPass": "",
+        "timeout": "300",
+        "shareCookies": false,
+        "ca": "",
+        "rejectUnauthorized": true,
+        "followRedirect": true,
+        "useQuerystring": false,
+        "gzip": true,
+        "useMtls": false,
+        "contentType": "application/json",
+        "data": "{\"state\": \"WA\", \"expiringWithinDays\": 30, \"alertTypes\": [\"insurance\", \"bond\"], \"includeNonExpiring\": false, \"maxRecords\": 1000}",
+        "followAllRedirects": false
+      },
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0,
+          "name": "Run Apify Actor: WA insurance/bond expiration radar"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "builtin:BasicFeeder",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "array": "{{1.data}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0,
+          "name": "Iterate contractors"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "builtin:BasicRouter",
+      "version": 1,
+      "mapper": null,
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0
+        }
+      },
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 4,
+              "module": "hubspotcrm:createUpdateCompany",
+              "version": 2,
+              "parameters": {
+                "__IMTCONN__": null
+              },
+              "filter": {
+                "name": "Only expiring alerts",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{2.is_expiring_alert}}",
+                      "o": "boolean:equal",
+                      "b": "true"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "properties": {
+                  "name": "{{2.contractor.company_name}}",
+                  "phone": "{{2.contractor.phone_e164}}",
+                  "address": "{{2.contractor.address.line1}}",
+                  "city": "{{2.contractor.address.city}}",
+                  "state": "{{2.contractor.address.state}}",
+                  "zip": "{{2.contractor.address.zip}}",
+                  "industry": "CONSTRUCTION",
+                  "description": "WA L&I license {{2.contractor.license_number}} ({{2.contractor.license_type}}), UBI {{2.contractor.ubi}}; specialties: {{join(2.contractor.specialties; \", \")}}"
+                }
+              },
+              "metadata": {
+                "designer": {
+                  "x": 900,
+                  "y": -150,
+                  "name": "HubSpot: create/update company"
+                }
+              }
+            },
+            {
+              "id": 5,
+              "module": "hubspotcrm:createTask",
+              "version": 2,
+              "parameters": {
+                "__IMTCONN__": null
+              },
+              "mapper": {
+                "subject": "Renewal outreach: {{2.contractor.company_name}} - {{2.alerts[1].type}} in {{2.alerts[1].days_until}} days",
+                "body": "{{2.contractor.company_name}} (WA L&I license {{2.contractor.license_number}}, status {{2.contractor.license_status}})\nAlerts: {{join(map(2.alerts; \"type\"); \", \")}}\nInsurance: {{2.insurance.company}} policy {{2.insurance.policy_no}} expires {{2.insurance.expiration_date}} ({{2.insurance.days_to_expiration}} days) - agency {{2.insurance.agency_name}}\nBond: {{2.bond.surety}} {{2.bond.amount_usd}} USD, cancel date {{2.bond.cancel_date}} ({{2.bond.days_to_cancel}} days)\nPhone: {{2.contractor.phone_e164}}\nSource: Washington State L&I public contractor data via Apify Actor contractor-license-insurance-bond-radar.\nCompliance: B2B only. Check TCPA / DNC / state telemarketing rules before calling or texting.",
+                "status": "NOT_STARTED",
+                "priority": "HIGH",
+                "type": "CALL",
+                "dueDate": "{{formatDate(2.alerts[1].date; \"YYYY-MM-DD\")}}",
+                "ownerId": "",
+                "associations": [
+                  {
+                    "objectType": "company",
+                    "objectId": "{{4.id}}"
+                  }
+                ]
+              },
+              "metadata": {
+                "designer": {
+                  "x": 1200,
+                  "y": -150,
+                  "name": "HubSpot: create renewal task"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 6,
+              "module": "pipedrive:createOrganization",
+              "version": 2,
+              "parameters": {
+                "__IMTCONN__": null
+              },
+              "filter": {
+                "name": "Only expiring alerts",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{2.is_expiring_alert}}",
+                      "o": "boolean:equal",
+                      "b": "true"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "name": "{{2.contractor.company_name}}",
+                "address": "{{2.contractor.address.line1}}, {{2.contractor.address.city}}, {{2.contractor.address.state}} {{2.contractor.address.zip}}",
+                "visible_to": "3"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 900,
+                  "y": 150,
+                  "name": "Pipedrive: create organization"
+                }
+              }
+            },
+            {
+              "id": 7,
+              "module": "pipedrive:createActivity",
+              "version": 2,
+              "parameters": {
+                "__IMTCONN__": null
+              },
+              "mapper": {
+                "subject": "Renewal outreach: {{2.contractor.company_name}} - {{2.alerts[1].type}} in {{2.alerts[1].days_until}} days",
+                "type": "call",
+                "due_date": "{{formatDate(2.alerts[1].date; \"YYYY-MM-DD\")}}",
+                "org_id": "{{6.id}}",
+                "note": "{{2.contractor.company_name}} (WA L&I license {{2.contractor.license_number}}, status {{2.contractor.license_status}})\nAlerts: {{join(map(2.alerts; \"type\"); \", \")}}\nInsurance: {{2.insurance.company}} policy {{2.insurance.policy_no}} expires {{2.insurance.expiration_date}} ({{2.insurance.days_to_expiration}} days) - agency {{2.insurance.agency_name}}\nBond: {{2.bond.surety}} {{2.bond.amount_usd}} USD, cancel date {{2.bond.cancel_date}} ({{2.bond.days_to_cancel}} days)\nPhone: {{2.contractor.phone_e164}}\nSource: Washington State L&I public contractor data via Apify Actor contractor-license-insurance-bond-radar.\nCompliance: B2B only. Check TCPA / DNC / state telemarketing rules before calling or texting.",
+                "done": "0"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 1200,
+                  "y": 150,
+                  "name": "Pipedrive: create renewal activity"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "slots": null,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": {
+      "orphans": []
+    },
+    "zone": "us1.make.com"
+  },
+  "scheduling": {
+    "type": "weekly",
+    "days": [
+      1
+    ],
+    "time": "07:00"
+  }
+}
