@@ -1,0 +1,76 @@
+{
+  "name": "Bulk Keyword Search Volume, CPC & Difficulty (Google, Bing, YouTube) -> Sheets",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Keyword Search Volume & CPC API \u2014 Google, Bing, YouTube\nExpands seed keywords across Google, Bing & YouTube autocomplete with volume, CPC, difficulty & 12-month trends via `rickyz1x/keyword-search-volume-cpc-difficulty-api`.",
+        "height": 240,
+        "width": 500
+      },
+      "id": "note-kw-1",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        180,
+        120
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "manual-kw-1",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/rickyz1x~keyword-search-volume-cpc-difficulty-api/run-sync-get-dataset-items",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "={{ $env.APIFY_API_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"keywords\": [\"crm software\", \"roofing contractor\", \"ai agent platform\"],\n  \"country\": \"US\",\n  \"language\": \"en\",\n  \"expandWithModifiers\": true,\n  \"includeExpandedKeywords\": true,\n  \"maxExpandedPerSeed\": 10\n}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "http-kw-1",
+      "name": "Run Apify Keyword Search Volume & CPC API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        450,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Run Apify Keyword Search Volume & CPC API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

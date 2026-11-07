@@ -1,0 +1,127 @@
+{
+  "name": "Daily ATS Career Site Hiring Signals (Greenhouse, Lever, Ashby, Workday) -> Sheets + Slack",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## ATS Career Site Jobs & Hiring Signals (Apify)\nMonitors target companies across Greenhouse, Lever, Ashby, Workday & SmartRecruiters via `rickyz1x/ats-jobs-hiring-signals-api`.\n\n**Setup:**\n1. Set your `APIFY_API_TOKEN` in the HTTP Request node.\n2. Customize the `companies` array with target company slugs or domains.\n3. Connect your Slack / Google Sheets credentials.",
+        "height": 260,
+        "width": 520
+      },
+      "id": "note-ats-1",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        180,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "sched-ats-1",
+      "name": "Weekday 08:00 Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        200,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/rickyz1x~ats-jobs-hiring-signals-api/run-sync-get-dataset-items",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "={{ $env.APIFY_API_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"companies\": [\"greenhouse:stripe\", \"ashby:linear\", \"lever:palantir\"],\n  \"maxJobsPerCompany\": 25,\n  \"includeHiringSignalSummary\": true,\n  \"onlyNew\": true\n}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "http-ats-1",
+      "name": "Run Apify ATS Jobs & Hiring Signals API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-summary",
+              "leftValue": "={{ $json.record_type }}",
+              "rightValue": "company_hiring_summary",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-ats-1",
+      "name": "Is Hiring Signal Summary?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        680,
+        420
+      ]
+    }
+  ],
+  "connections": {
+    "Weekday 08:00 Trigger": {
+      "main": [
+        [
+          {
+            "node": "Run Apify ATS Jobs & Hiring Signals API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Apify ATS Jobs & Hiring Signals API": {
+      "main": [
+        [
+          {
+            "node": "Is Hiring Signal Summary?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

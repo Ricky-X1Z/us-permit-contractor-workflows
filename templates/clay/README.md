@@ -2,7 +2,7 @@
 
 Clay HTTP API column, plus curl / Python / JavaScript / n8n / Make equivalents and an MCP setup for Claude Desktop and Cursor.
 
-Actor: **Contractor & Address Permit History API (MCP-ready)**, Apify Store slug `permit-history-lookup-api`.
+Actor: **Building Permit History API — Contractor & Address Lookup (MCP-ready)**, Apify Store slug `permit-history-lookup-api`.
 
 | Endpoint | URL |
 |---|---|
